@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/hcl-lang/decoder"
 	"github.com/hashicorp/hcl-lang/lang"
+	"github.com/hashicorp/hcl-lang/reference"
 	"github.com/hashicorp/terraform-ls/internal/algolia"
 	"github.com/hashicorp/terraform-ls/internal/document"
 	"github.com/hashicorp/terraform-ls/internal/eventbus"
@@ -124,6 +125,15 @@ func (f *ModulesFeature) PathContext(path lang.Path) (*decoder.PathContext, erro
 	}
 
 	return pathReader.PathContext(path)
+}
+
+func (f *ModulesFeature) ReferenceOrigins(path lang.Path) (reference.Origins, error) {
+	pathReader := &fdecoder.PathReader{
+		StateReader: f.Store,
+		RootReader:  f.rootFeature,
+	}
+
+	return pathReader.ReferenceOrigins(path)
 }
 
 func (f *ModulesFeature) Paths(ctx context.Context) []lang.Path {

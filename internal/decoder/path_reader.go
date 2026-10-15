@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/hcl-lang/decoder"
 	"github.com/hashicorp/hcl-lang/lang"
+	"github.com/hashicorp/hcl-lang/reference"
 )
 
 type PathReaderMap map[string]decoder.PathReader
@@ -37,4 +38,29 @@ func (mr *GlobalPathReader) PathContext(path lang.Path) (*decoder.PathContext, e
 	}
 
 	return nil, fmt.Errorf("no feature found for language %s", path.LanguageID)
+}
+
+// ReferenceOriginsReader is implemented by features which can provide
+// reference origins for a path more cheaply than a full PathContext.
+type ReferenceOriginsReader interface {
+	ReferenceOrigins(path lang.Path) (reference.Origins, error)
+}
+
+// ReferenceOrigins returns the reference origins for the given path,
+// avoiding the construction of a full PathContext where possible.
+func (mr *GlobalPathReader) ReferenceOrigins(path lang.Path) (reference.Origins, error) {
+	feature, ok := mr.PathReaderMap[path.LanguageID]
+	if !ok {
+		return nil, fmt.Errorf("no feature found for language %s", path.LanguageID)
+	}
+
+	if or, ok := feature.(ReferenceOriginsReader); ok {
+		return or.ReferenceOrigins(path)
+	}
+
+	pathCtx, err := feature.PathContext(path)
+	if err != nil {
+		return nil, err
+	}
+	return pathCtx.ReferenceOrigins, nil
 }

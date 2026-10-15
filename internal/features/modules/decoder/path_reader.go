@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/hcl-lang/decoder"
 	"github.com/hashicorp/hcl-lang/lang"
+	"github.com/hashicorp/hcl-lang/reference"
 	"github.com/hashicorp/terraform-ls/internal/features/modules/state"
 	ilsp "github.com/hashicorp/terraform-ls/internal/lsp"
 	tfaddr "github.com/hashicorp/terraform-registry-address"
@@ -73,4 +74,14 @@ func (pr *PathReader) PathContext(path lang.Path) (*decoder.PathContext, error) 
 		StateReader: pr.StateReader,
 		RootReader:  pr.RootReader,
 	})
+}
+
+// ReferenceOrigins returns the reference origins for the given path
+// without building the (expensive) schema of a full PathContext.
+func (pr *PathReader) ReferenceOrigins(path lang.Path) (reference.Origins, error) {
+	mod, err := pr.StateReader.ModuleRecordByPath(path.Path)
+	if err != nil {
+		return nil, err
+	}
+	return moduleReferenceOrigins(mod), nil
 }

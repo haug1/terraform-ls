@@ -49,7 +49,29 @@ func ReferenceCount(showReferencesCmdId string) lang.CodeLensFunc {
 			dedupedTargets[rng] = append(dedupedTargets[rng], refTarget)
 		}
 
+		// Collect origins of every path once per request, rather than
+		// once per target, and without building a full PathContext
+		// (incl. provider schemas) where the reader supports that.
+		type pathOrigins struct {
+			path    lang.Path
+			origins reference.Origins
+		}
+		allOrigins := make([]pathOrigins, 0)
+		for _, p := range pathReader.Paths(ctx) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			origins, err := referenceOrigins(pathReader, p)
+			if err != nil {
+				continue
+			}
+			allOrigins = append(allOrigins, pathOrigins{path: p, origins: origins})
+		}
+
 		for rng, refTargets := range dedupedTargets {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			originCount := 0
 			var defRange *hcl.Range
 			for _, refTarget := range refTargets {
@@ -57,13 +79,8 @@ func ReferenceCount(showReferencesCmdId string) lang.CodeLensFunc {
 					defRange = refTarget.DefRangePtr
 				}
 
-				paths := pathReader.Paths(ctx)
-				for _, p := range paths {
-					pathCtx, err := pathReader.PathContext(p)
-					if err != nil {
-						continue
-					}
-					originCount += len(pathCtx.ReferenceOrigins.Match(p, refTarget, path))
+				for _, po := range allOrigins {
+					originCount += len(po.origins.Match(po.path, refTarget, path))
 				}
 			}
 
@@ -97,6 +114,21 @@ func ReferenceCount(showReferencesCmdId string) lang.CodeLensFunc {
 
 		return lenses, nil
 	}
+}
+
+type referenceOriginsReader interface {
+	ReferenceOrigins(path lang.Path) (reference.Origins, error)
+}
+
+func referenceOrigins(pathReader decoder.PathReader, p lang.Path) (reference.Origins, error) {
+	if or, ok := pathReader.(referenceOriginsReader); ok {
+		return or.ReferenceOrigins(p)
+	}
+	pathCtx, err := pathReader.PathContext(p)
+	if err != nil {
+		return nil, err
+	}
+	return pathCtx.ReferenceOrigins, nil
 }
 
 type Position lsp.Position
