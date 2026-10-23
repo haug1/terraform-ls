@@ -1,0 +1,45 @@
+name: provider-schemas
+
+# Publishes generated provider schemas (internal/schemas/data) as a release
+# asset, so local builds can download them instead of running the slow
+# `go generate ./internal/schemas`.
+
+on:
+  push:
+    branches:
+      - fix/codelens-reference-count-perf
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: "provider-schemas"
+  ASSET_NAME: "provider-schemas.tar.gz"
+
+jobs:
+  generate-provider-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ".go-version"
+      - name: Generate provider schemas
+        run: |
+          go generate ./internal/schemas
+          du -h -s ./internal/schemas/data
+      - name: Package provider schemas
+        run: tar -czf "$ASSET_NAME" -C internal/schemas data
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Provider schemas" \
+              --notes "Generated provider schemas, extract into internal/schemas/"
+          gh release upload "$RELEASE_TAG" "$ASSET_NAME" --clobber
